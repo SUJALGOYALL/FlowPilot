@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: flowpilot-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: flowpilot
+      POSTGRES_PASSWORD: flowpilot
+      POSTGRES_DB: flowpilot
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+volumes:
+  postgres_data:
