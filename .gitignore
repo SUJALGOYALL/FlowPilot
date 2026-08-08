@@ -1,7 +1,28 @@
-.venv/
+# Environment
 .env
+
+# Python
+.venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Testing
 .pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
 .vscode/
 .idea/
+
+# Node
+node_modules/
+.next/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
