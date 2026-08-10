@@ -3,6 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
+from app.db.redis import redis_client
 
 
 router = APIRouter(
@@ -29,4 +30,15 @@ async def database_health_check(
         "status": "healthy",
         "database": "connected",
         "test": result.scalar(),
+    }
+
+
+@router.get("/redis")
+async def redis_health_check():
+    result = await redis_client.ping()
+
+    return {
+        "status": "healthy",
+        "redis": "connected",
+        "ping": result,
     }
