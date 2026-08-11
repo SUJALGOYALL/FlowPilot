@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -224,3 +225,16 @@ async def login(
         refresh_token=refresh_token,
         token_type="bearer",
     )
+
+@router.get("/me")
+async def get_me(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "is_verified": current_user.is_verified,
+        "is_active": current_user.is_active,
+    }
