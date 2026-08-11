@@ -26,6 +26,14 @@ services:
     volumes:
       - redis_data:/data
 
+  adminer:
+    image: adminer
+    container_name: flowpilot-adminer
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
 volumes:
   postgres_data:
   redis_data:

@@ -5,9 +5,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import hash_password
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.auth import RegisterRequest
+from app.schemas.auth import (
+    RegisterRequest,
+    VerifyEmailRequest,
+)
 from app.services.email import send_email
-from app.services.otp import generate_otp, store_otp
+from app.schemas.auth import RegisterRequest, VerifyEmailRequest
+from app.services.otp import (
+    delete_otp,
+    generate_otp,
+    store_otp,
+    verify_otp,
+)
 
 
 router = APIRouter(
@@ -83,4 +92,55 @@ async def register(
         "message": "Registration successful. "
         "Please verify your email using the OTP sent to you.",
         "email": data.email,
+    }
+
+@router.post("/verify-email")
+async def verify_email(
+    data: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    # 1. Find the user
+    result = await db.execute(
+        select(User).where(User.email == data.email)
+    )
+
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    # 2. Check whether email is already verified
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is already verified.",
+        )
+
+    # 3. Verify OTP from Redis
+    is_valid = await verify_otp(
+        data.email,
+        data.otp,
+    )
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP.",
+        )
+
+    # 4. Mark email as verified
+    user.is_verified = True
+
+    # 5. Remove OTP so it cannot be reused
+    await delete_otp(data.email)
+
+    # 6. Save the change
+    await db.commit()
+
+    return {
+        "message": "Email verified successfully.",
+        "email": user.email,
     }
