@@ -8,6 +8,7 @@ from alembic import context
 from app.core.config import settings
 from app.db.base import Base
 from app.models.user import User
+from app.models.employee import Employee
 from app.models.email_verification import EmailVerification
 
 config = context.config

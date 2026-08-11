@@ -2,15 +2,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
     RegisterRequest,
     VerifyEmailRequest,
 )
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
+)
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    VerifyEmailRequest,
+)
+from app.services.token import store_refresh_token
 from app.services.email import send_email
-from app.schemas.auth import RegisterRequest, VerifyEmailRequest
 from app.services.otp import (
     delete_otp,
     generate_otp,
@@ -144,3 +155,72 @@ async def verify_email(
         "message": "Email verified successfully.",
         "email": user.email,
     }
+
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+)
+async def login(
+    data: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    # 1. Find the user
+    result = await db.execute(
+        select(User).where(User.email == data.email)
+    )
+
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+        )
+
+    # 2. Check password
+    if not verify_password(
+        data.password,
+        user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+        )
+
+    # 3. Check whether the account is active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive.",
+        )
+
+    # 4. Check email verification
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in.",
+        )
+
+    # 5. Generate access token
+    access_token = create_access_token(
+        user_id=user.id,
+        role=user.role,
+    )
+
+    # 6. Generate refresh token
+    refresh_token, jti = create_refresh_token(
+        user_id=user.id,
+    )
+
+    # 7. Store refresh session in Redis
+    await store_refresh_token(
+        jti=jti,
+        user_id=user.id,
+    )
+
+    # 8. Return tokens
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
