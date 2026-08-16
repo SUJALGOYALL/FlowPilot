@@ -14,7 +14,7 @@ class TaskExecutionService:
             select(WorkflowTask)
             .where(
                 WorkflowTask.workflow_run_id == workflow_run_id,
-                WorkflowTask.status == "pending",
+                WorkflowTask.status.in_(["pending", "approved"]),
             )
             .order_by(WorkflowTask.id)
         )

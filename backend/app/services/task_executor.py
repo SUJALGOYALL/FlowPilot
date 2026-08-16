@@ -11,14 +11,15 @@ class TaskExecutor:
         session: AsyncSession,
         task: WorkflowTask,
     ) -> WorkflowTask:
-        if task.status != "pending":
+        if task.status not in {"pending", "approved"}:
             raise ValueError(
                 f"Task '{task.task_id}' cannot be executed "
                 f"from status '{task.status}'."
             )
 
-        # Approval-required tasks must wait for human approval.
-        if task.requires_approval:
+        # Approval-required tasks must wait for human approval
+        # before their first execution.
+        if task.status == "pending" and task.requires_approval:
             task.status = "waiting_approval"
             task.result = (
                 f"Waiting for approval from "
@@ -30,7 +31,9 @@ class TaskExecutor:
 
             return task
 
-        # Normal task execution.
+        # Task is either:
+        # 1. A normal pending task, or
+        # 2. An approved task.
         task.status = "running"
         task.started_at = datetime.now(timezone.utc)
 

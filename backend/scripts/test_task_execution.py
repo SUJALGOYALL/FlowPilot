@@ -1,25 +1,4 @@
 import asyncio
-import asyncio
-
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.db.database import AsyncSessionLocal
-from app.models.employee import Employee
-from app.models.user import User
-from app.models.workflow import (
-    WorkflowDefinition,
-    WorkflowTaskDefinition,
-    WorkflowRun,
-    WorkflowTask,
-)
-from app.services.task_execution import TaskExecutionService
-import app.models
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.db.database import AsyncSessionLocal
-from app.services.task_execution import TaskExecutionService
-
-import asyncio
 
 import app.models
 
@@ -27,9 +6,8 @@ from app.db.database import AsyncSessionLocal
 from app.services.task_execution import TaskExecutionService
 from app.services.task_executor import TaskExecutor
 
-
-WORKFLOW_RUN_ID = 1
-TASK_ID_TO_EXECUTE = "vpn_access"
+WORKFLOW_RUN_ID = 2
+TASK_ID_TO_EXECUTE = "backend_environment"
 
 async def test_task_execution() -> None:
     async with AsyncSessionLocal() as session:
