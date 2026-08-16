@@ -4,6 +4,7 @@ from sqlalchemy import Date, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.workflow import WorkflowRun
 
 
 class Employee(Base):
@@ -78,4 +79,10 @@ class Employee(Base):
     direct_reports: Mapped[list["Employee"]] = relationship(
         "Employee",
         back_populates="manager",
+    )
+
+    workflow_runs: Mapped[list["WorkflowRun"]] = relationship(
+        "WorkflowRun",
+        back_populates="employee",
+        cascade="all, delete-orphan",
     )

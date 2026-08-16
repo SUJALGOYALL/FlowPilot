@@ -1,0 +1,74 @@
+name: ai_ml_engineer_onboarding
+version: "1.0"
+
+description: Onboarding workflow for AI/ML Engineers.
+
+trigger:
+  department: Engineering
+  job_title: AI/ML Engineer
+
+tasks:
+
+  - id: welcome_email
+    name: Send welcome email
+    type: notification
+
+  - id: company_account
+    name: Create company account
+    type: provisioning
+    depends_on:
+      - welcome_email
+
+  - id: slack_access
+    name: Provision Slack access
+    type: provisioning
+    depends_on:
+      - company_account
+
+  - id: github_access
+    name: Provision GitHub access
+    type: provisioning
+    depends_on:
+      - company_account
+
+  - id: security_training
+    name: Complete security training
+    type: employee_task
+    depends_on:
+      - company_account
+
+  - id: vpn_access
+    name: Provision VPN access
+    type: provisioning
+    requires_approval: true
+    approval_role: manager
+    depends_on:
+      - security_training
+
+  - id: ml_environment
+    name: Provision ML development environment
+    type: provisioning
+    depends_on:
+      - github_access
+
+  - id: gpu_access
+    name: Provision GPU environment
+    type: provisioning
+    requires_approval: true
+    approval_role: manager
+    depends_on:
+      - ml_environment
+
+  - id: model_registry
+    name: Provision model registry access
+    type: provisioning
+    requires_approval: true
+    approval_role: manager
+    depends_on:
+      - ml_environment
+
+  - id: manager_1on1
+    name: Schedule manager 1:1
+    type: scheduling
+    depends_on:
+      - company_account
