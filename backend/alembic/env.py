@@ -13,6 +13,7 @@ from app.models.email_verification import EmailVerification
 
 from app.models.workflow import (
     WorkflowDefinition,
+    WorkflowTaskDefinition,
     WorkflowRun,
     WorkflowTask,
 )
