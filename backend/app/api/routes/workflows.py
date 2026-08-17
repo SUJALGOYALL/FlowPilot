@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_role
 from app.db.database import get_db
@@ -19,6 +20,8 @@ from app.services.approval_service import ApprovalService
 from app.services.task_execution import TaskExecutionService
 from app.services.task_executor import TaskExecutor
 from app.services.workflow_execution import WorkflowExecutionService
+from app.services.workflow_orchestrator import WorkflowOrchestrator
+
 
 
 router = APIRouter(
@@ -37,6 +40,8 @@ def get_workflow_execution_service() -> WorkflowExecutionService:
         workflows_dir="workflows",
     )
 
+def get_workflow_orchestrator() -> WorkflowOrchestrator:
+    return WorkflowOrchestrator()
 
 def get_task_execution_service() -> TaskExecutionService:
     return TaskExecutionService()
@@ -110,19 +115,18 @@ async def create_workflow_run(
             detail=str(exc),
         )
 
-    # 4. Load tasks for response
+    # 4. Reload workflow run with tasks eagerly loaded
     result = await db.execute(
-        select(WorkflowTask)
-        .where(
-            WorkflowTask.workflow_run_id
-            == workflow_run.id
+        select(WorkflowRun)
+        .options(
+            selectinload(WorkflowRun.tasks)
         )
-        .order_by(WorkflowTask.id)
+        .where(
+            WorkflowRun.id == workflow_run.id
+        )
     )
 
-    workflow_run.tasks = list(
-        result.scalars().all()
-    )
+    workflow_run = result.scalar_one()
 
     return workflow_run
 
@@ -157,21 +161,87 @@ async def get_workflow_run(
             detail="Workflow run not found.",
         )
 
-    task_result = await db.execute(
-        select(WorkflowTask)
-        .where(
-            WorkflowTask.workflow_run_id
-            == workflow_run_id
+    result = await db.execute(
+        select(WorkflowRun)
+        .options(
+            selectinload(WorkflowRun.tasks)
         )
-        .order_by(WorkflowTask.id)
+        .where(
+            WorkflowRun.id == workflow_run_id
+        )
     )
 
-    workflow_run.tasks = list(
-        task_result.scalars().all()
-    )
+    workflow_run = result.scalar_one_or_none()
+
+    if workflow_run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow run not found.",
+        )
 
     return workflow_run
 
+# ---------------------------------------------------------
+# Execute workflow
+# ---------------------------------------------------------
+
+
+@router.post(
+    "/runs/{workflow_run_id}/execute",
+    response_model=WorkflowRunResponse,
+)
+async def execute_workflow(
+    workflow_run_id: int,
+    current_user: User = Depends(
+        require_role("hr", "admin")
+    ),
+    db: AsyncSession = Depends(get_db),
+    orchestrator: WorkflowOrchestrator = Depends(
+        get_workflow_orchestrator
+    ),
+):
+    # 1. Verify workflow run exists
+    result = await db.execute(
+        select(WorkflowRun).where(
+            WorkflowRun.id == workflow_run_id
+        )
+    )
+
+    workflow_run = result.scalar_one_or_none()
+
+    if workflow_run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workflow run not found.",
+        )
+
+    # 2. Execute the workflow automatically
+    try:
+        workflow_run, _ = await orchestrator.execute_workflow(
+            session=db,
+            workflow_run_id=workflow_run_id,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        )
+
+    # 3. Reload with tasks eagerly loaded
+    result = await db.execute(
+        select(WorkflowRun)
+        .options(
+            selectinload(WorkflowRun.tasks)
+        )
+        .where(
+            WorkflowRun.id == workflow_run_id
+        )
+    )
+
+    workflow_run = result.scalar_one()
+
+    return workflow_run
 
 # ---------------------------------------------------------
 # Execute task

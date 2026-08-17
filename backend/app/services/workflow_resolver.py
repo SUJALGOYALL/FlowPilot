@@ -11,10 +11,10 @@ from app.services.workflow_loader import WorkflowLoader
 
 class WorkflowResolver:
     WORKFLOW_FILES = {
-        "Backend Engineer": "backend_engineer.yaml",
-        "Frontend Engineer": "frontend_engineer.yaml",
-        "AI/ML Engineer": "ai_ml_engineer.yaml",
-        "DevOps Engineer": "devops_engineer.yaml",
+        "Backend Engineer": "engineering/backend_engineer.yaml",
+        "Frontend Engineer": "engineering/frontend_engineer.yaml",
+        "AI/ML Engineer": "engineering/ai_ml_engineer.yaml",
+        "DevOps Engineer": "engineering/devops_engineer.yaml",
     }
 
     def __init__(self, workflows_dir: str | Path):
