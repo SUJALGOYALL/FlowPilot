@@ -37,6 +37,23 @@ class WorkflowOrchestrator:
         session: AsyncSession,
         workflow_run_id: int,
     ):
+        # Load the workflow run first so we can validate
+        # its current state before executing anything.
+        workflow_run = await self.workflow_service.get_workflow_run(
+            session=session,
+            workflow_run_id=workflow_run_id,
+        )
+
+        if workflow_run.status == "completed":
+            raise ValueError(
+                f"Workflow run '{workflow_run_id}' is already completed."
+            )
+
+        if workflow_run.status == "failed":
+            raise ValueError(
+                f"Workflow run '{workflow_run_id}' has failed."
+            )
+
         executed_tasks = []
 
         while True:

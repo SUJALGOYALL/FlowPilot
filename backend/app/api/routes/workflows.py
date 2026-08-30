@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +21,6 @@ from app.services.workflow_execution import WorkflowExecutionService
 from app.services.workflow_orchestrator import WorkflowOrchestrator
 
 
-
 router = APIRouter(
     prefix="/workflows",
     tags=["Workflows"],
@@ -40,8 +37,10 @@ def get_workflow_execution_service() -> WorkflowExecutionService:
         workflows_dir="workflows",
     )
 
+
 def get_workflow_orchestrator() -> WorkflowOrchestrator:
     return WorkflowOrchestrator()
+
 
 def get_task_execution_service() -> TaskExecutionService:
     return TaskExecutionService()
@@ -181,6 +180,7 @@ async def get_workflow_run(
 
     return workflow_run
 
+
 # ---------------------------------------------------------
 # Execute workflow
 # ---------------------------------------------------------
@@ -242,6 +242,7 @@ async def execute_workflow(
     workflow_run = result.scalar_one()
 
     return workflow_run
+
 
 # ---------------------------------------------------------
 # Execute task
@@ -346,8 +347,8 @@ async def approve_task(
     approval_service: ApprovalService = Depends(
         get_approval_service
     ),
-    workflow_service: WorkflowExecutionService = Depends(
-        get_workflow_execution_service
+    orchestrator: WorkflowOrchestrator = Depends(
+        get_workflow_orchestrator
     ),
 ):
     # 1. Find task
@@ -378,10 +379,18 @@ async def approve_task(
             detail=str(exc),
         )
 
-    # 3. Recalculate workflow status
-    await workflow_service.update_workflow_run_status(
-        session=db,
-        workflow_run_id=task.workflow_run_id,
-    )
+    # 3. Automatically resume workflow
+    try:
+        await orchestrator.execute_workflow(
+            session=db,
+            workflow_run_id=task.workflow_run_id,
+        )
 
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        )
+
+    # 4. Return approved task
     return approved_task

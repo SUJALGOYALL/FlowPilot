@@ -120,3 +120,23 @@ class WorkflowExecutionService:
         await session.refresh(workflow_run)
 
         return workflow_run
+
+    async def get_workflow_run(
+        self,
+        session: AsyncSession,
+        workflow_run_id: int,
+    ) -> WorkflowRun:
+        result = await session.execute(
+            select(WorkflowRun).where(
+                WorkflowRun.id == workflow_run_id
+            )
+        )
+
+        workflow_run = result.scalar_one_or_none()
+
+        if workflow_run is None:
+            raise ValueError(
+                f"Workflow run '{workflow_run_id}' not found."
+            )
+
+        return workflow_run
