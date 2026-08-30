@@ -3,29 +3,9 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.workflow import WorkflowTask
-from app.services.task_executors.employee_task import (
-    EmployeeTaskExecutor,
-)
-from app.services.task_executors.notification import (
-    NotificationTaskExecutor,
-)
-from app.services.task_executors.provisioning import (
-    ProvisioningTaskExecutor,
-)
-from app.services.task_executors.scheduling import (
-    SchedulingTaskExecutor,
-)
 
 
 class TaskExecutor:
-    def __init__(self):
-        self.executors = {
-            "notification": NotificationTaskExecutor(),
-            "provisioning": ProvisioningTaskExecutor(),
-            "scheduling": SchedulingTaskExecutor(),
-            "employee_task": EmployeeTaskExecutor(),
-        }
-
     async def execute(
         self,
         session: AsyncSession,
@@ -51,22 +31,18 @@ class TaskExecutor:
 
             return task
 
-        executor = self.executors.get(task.task_type)
-
-        if executor is None:
-            raise ValueError(
-                f"No executor registered for task type "
-                f"'{task.task_type}'."
-            )
-
+        # Task is either:
+        # 1. A normal pending task, or
+        # 2. An approved task.
         task.status = "running"
         task.started_at = datetime.now(timezone.utc)
 
         await session.flush()
 
-        task = await executor.execute(
-            session=session,
-            task=task,
+        # Temporary deterministic execution.
+        # Real task executors will replace this later.
+        task.result = (
+            f"Task '{task.name}' executed successfully."
         )
 
         task.status = "completed"
