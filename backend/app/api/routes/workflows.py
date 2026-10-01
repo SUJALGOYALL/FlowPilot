@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_role
+from app.api.deps import authorize_employee_access, require_role
 from app.db.database import get_db
 from app.models.employee import Employee
 from app.models.user import User
@@ -73,6 +73,9 @@ async def create_workflow_run(
     workflow_service: WorkflowExecutionService = Depends(
         get_workflow_execution_service
     ),
+    orchestrator: WorkflowOrchestrator = Depends(
+        get_workflow_orchestrator
+    ),
 ):
     # 1. Verify employee exists
     result = await db.execute(
@@ -114,7 +117,21 @@ async def create_workflow_run(
             detail=str(exc),
         )
 
-    # 4. Reload workflow run with tasks eagerly loaded
+    # 4. Start deterministic execution; approval-required tasks
+    # remain waiting for approval through the existing engine flow.
+    try:
+        await orchestrator.execute_workflow(
+            session=db,
+            workflow_run_id=workflow_run.id,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        )
+
+    # 5. Reload workflow run with tasks eagerly loaded
     result = await db.execute(
         select(WorkflowRun)
         .options(
@@ -160,6 +177,12 @@ async def get_workflow_run(
             detail="Workflow run not found.",
         )
 
+    await authorize_employee_access(
+        session=db,
+        current_user=current_user,
+        employee_id=workflow_run.employee_id,
+    )
+
     result = await db.execute(
         select(WorkflowRun)
         .options(
@@ -179,6 +202,58 @@ async def get_workflow_run(
         )
 
     return workflow_run
+
+
+# ---------------------------------------------------------
+# Get task state
+# ---------------------------------------------------------
+
+
+@router.get(
+    "/tasks/{task_id}",
+    response_model=WorkflowTaskResponse,
+)
+async def get_workflow_task(
+    task_id: int,
+    current_user: User = Depends(
+        require_role("hr", "admin", "manager")
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(WorkflowTask).where(
+            WorkflowTask.id == task_id
+        )
+    )
+
+    task = result.scalar_one_or_none()
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found.",
+        )
+
+    workflow_result = await db.execute(
+        select(WorkflowRun.employee_id).where(
+            WorkflowRun.id == task.workflow_run_id
+        )
+    )
+    employee_id = workflow_result.scalar_one_or_none()
+
+    if employee_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found.",
+        )
+
+    await authorize_employee_access(
+        session=db,
+        current_user=current_user,
+        employee_id=employee_id,
+    )
+
+    return task
 
 
 # ---------------------------------------------------------
@@ -371,6 +446,13 @@ async def approve_task(
         approved_task = await approval_service.approve(
             session=db,
             task=task,
+            approver=current_user,
+        )
+
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to approve this task.",
         )
 
     except ValueError as exc:
@@ -392,5 +474,7 @@ async def approve_task(
             detail=str(exc),
         )
 
-    # 4. Return approved task
+    # 4. Return the task's persisted state after workflow resumption.
+    await db.refresh(approved_task)
+
     return approved_task

@@ -66,6 +66,7 @@ class WorkflowOrchestrator:
                 break
 
             progress_made = False
+            task_failed = False
 
             for task in ready_tasks:
                 previous_status = task.status
@@ -80,7 +81,11 @@ class WorkflowOrchestrator:
                 if completed_task.status != previous_status:
                     progress_made = True
 
-            if not progress_made:
+                if completed_task.status == "failed":
+                    task_failed = True
+                    break
+
+            if task_failed or not progress_made:
                 break
 
         workflow_run = (

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,28 +52,69 @@ class TaskExecutor:
 
             return task
 
-        executor = self.executors.get(task.task_type)
+        started_at = datetime.now(timezone.utc)
+        task.status = "running"
+        task.started_at = started_at
 
-        if executor is None:
-            raise ValueError(
-                f"No executor registered for task type "
-                f"'{task.task_type}'."
+        try:
+            await session.flush()
+
+            executor = self.executors.get(task.task_type)
+
+            if executor is None:
+                raise ValueError(
+                    f"No executor registered for task type "
+                    f"'{task.task_type}'."
+                )
+
+            task = await executor.execute(
+                session=session,
+                task=task,
             )
 
-        task.status = "running"
-        task.started_at = datetime.now(timezone.utc)
+            task.status = "completed"
+            task.completed_at = datetime.now(timezone.utc)
 
-        await session.flush()
+            await session.commit()
+            await session.refresh(task)
 
-        task = await executor.execute(
-            session=session,
-            task=task,
-        )
+            return task
 
-        task.status = "completed"
-        task.completed_at = datetime.now(timezone.utc)
+        except Exception as exc:
+            await session.rollback()
+            await session.refresh(task)
 
-        await session.commit()
-        await session.refresh(task)
+            task.status = "failed"
+            task.started_at = started_at
+            task.completed_at = None
+            task.result = self._failure_message(exc)
+
+            await session.commit()
+            await session.refresh(task)
 
         return task
+
+    def _failure_message(self, error: Exception) -> str:
+        message = str(error).strip() or type(error).__name__
+        message = re.sub(
+            r"(?i)\b(password|passwd|token|access[_-]?token|"
+            r"refresh[_-]?token|api[_-]?key|secret|credential)"
+            r"(\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|[^\s,;]+)",
+            r"\1\2[REDACTED]",
+            message,
+        )
+        message = re.sub(
+            r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+",
+            "Bearer [REDACTED]",
+            message,
+        )
+        message = re.sub(
+            r"(://[^:/\s]+:)[^@/\s]+@",
+            r"\1[REDACTED]@",
+            message,
+        )
+
+        if message.lower().startswith("mcp provisioning failed:"):
+            return message
+
+        return f"Task execution failed: {message}"

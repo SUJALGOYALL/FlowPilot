@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token
 from app.db.database import get_db
+from app.models.employee import Employee
 from app.models.user import User
 
 
@@ -85,3 +86,45 @@ def require_role(*allowed_roles: str):
         return current_user
 
     return role_checker
+
+
+async def authorize_employee_access(
+    session: AsyncSession,
+    current_user: User,
+    employee_id: int,
+) -> None:
+    if current_user.role in {"hr", "admin"}:
+        return
+
+    result = await session.execute(
+        select(Employee).where(Employee.id == employee_id)
+    )
+    employee = result.scalar_one_or_none()
+
+    if employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resource not found.",
+        )
+
+    if employee.user_id == current_user.id:
+        return
+
+    if current_user.role == "manager":
+        manager_result = await session.execute(
+            select(Employee.id).where(
+                Employee.user_id == current_user.id
+            )
+        )
+        manager_employee_id = manager_result.scalar_one_or_none()
+
+        if (
+            manager_employee_id is not None
+            and employee.manager_id == manager_employee_id
+        ):
+            return
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Resource not found.",
+    )

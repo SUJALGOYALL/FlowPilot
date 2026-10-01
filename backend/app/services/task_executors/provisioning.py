@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +10,22 @@ from app.services.mcp_client import MCPClient
 
 
 class ProvisioningTaskExecutor:
+    TOOL_MAPPING = {
+        "company_account": "create_company_account",
+        "slack_access": "provision_slack_access",
+        "github_access": "provision_github_access",
+        "vpn_access": "provision_vpn_access",
+        "backend_environment": "provision_development_environment",
+        "frontend_environment": "provision_frontend_environment",
+        "package_registry": "provision_package_registry",
+        "ml_environment": "provision_ml_environment",
+        "gpu_access": "provision_gpu_access",
+        "model_registry": "provision_model_registry",
+        "cloud_environment": "provision_cloud_environment",
+        "infrastructure_access": "provision_infrastructure_access",
+        "deployment_access": "provision_deployment_access",
+    }
+
     async def execute(
         self,
         session: AsyncSession,
@@ -52,6 +70,12 @@ class ProvisioningTaskExecutor:
             arguments=arguments,
         )
 
+        if getattr(result, "isError", False):
+            error_message = self._extract_error(result)
+            raise RuntimeError(
+                f"MCP provisioning failed: {error_message}"
+            )
+
         task.result = self._extract_result(result)
 
         return task
@@ -60,17 +84,7 @@ class ProvisioningTaskExecutor:
         self,
         task_id: str,
     ) -> str:
-        tool_mapping = {
-            "company_account": "create_company_account",
-            "slack_access": "provision_slack_access",
-            "github_access": "provision_github_access",
-            "vpn_access": "provision_vpn_access",
-            "backend_environment": (
-                "provision_development_environment"
-            ),
-        }
-
-        tool_name = tool_mapping.get(task_id)
+        tool_name = self.TOOL_MAPPING.get(task_id)
 
         if tool_name is None:
             raise ValueError(
@@ -80,7 +94,7 @@ class ProvisioningTaskExecutor:
 
         return tool_name
 
-    def _extract_result(self, result) -> str:
+    def _extract_result(self, result: Any) -> str:
         if hasattr(result, "content"):
             parts = []
 
@@ -92,3 +106,16 @@ class ProvisioningTaskExecutor:
                 return "\n".join(parts)
 
         return str(result)
+
+    def _extract_error(self, result: Any) -> str:
+        if hasattr(result, "content"):
+            parts = [
+                item.text
+                for item in result.content
+                if hasattr(item, "text") and item.text
+            ]
+
+            if parts:
+                return "\n".join(parts)
+
+        return "MCP tool returned an error without a text message."

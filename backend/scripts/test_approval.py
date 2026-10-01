@@ -4,6 +4,7 @@ import app.models
 
 from app.db.database import AsyncSessionLocal
 from app.models.workflow import WorkflowTask
+from app.models.user import User
 from app.services.approval_service import ApprovalService
 
 
@@ -28,6 +29,16 @@ async def test_approval() -> None:
             print(f"Task '{TASK_ID}' not found.")
             return
 
+        approver_result = await session.execute(
+            select(User).where(User.role.in_(["hr", "admin"])).limit(1)
+        )
+        approver = approver_result.scalar_one_or_none()
+
+        if approver is None:
+            raise ValueError(
+                "An HR or admin user is required to approve this task."
+            )
+
         print("\nBEFORE APPROVAL")
         print("=" * 40)
         print(
@@ -42,6 +53,7 @@ async def test_approval() -> None:
         approved_task = await approval_service.approve(
             session=session,
             task=task,
+            approver=approver,
         )
 
         print("\nAFTER APPROVAL")

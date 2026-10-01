@@ -61,6 +61,76 @@ async def provision_development_environment(
     )
 
 
+@mcp.tool()
+async def provision_frontend_environment(
+    employee_id: int,
+) -> str:
+    """Provision the frontend development environment for an employee."""
+    return (
+        f"Frontend development environment provisioned for employee "
+        f"{employee_id}."
+    )
+
+
+@mcp.tool()
+async def provision_package_registry(
+    employee_id: int,
+) -> str:
+    """Provision package registry access for an employee."""
+    return f"Package registry access provisioned for employee {employee_id}."
+
+
+@mcp.tool()
+async def provision_ml_environment(
+    employee_id: int,
+) -> str:
+    """Provision the machine learning development environment for an employee."""
+    return (
+        f"Machine learning development environment provisioned for "
+        f"employee {employee_id}."
+    )
+
+
+@mcp.tool()
+async def provision_gpu_access(
+    employee_id: int,
+) -> str:
+    """Provision GPU environment access for an employee."""
+    return f"GPU access provisioned for employee {employee_id}."
+
+
+@mcp.tool()
+async def provision_model_registry(
+    employee_id: int,
+) -> str:
+    """Provision model registry access for an employee."""
+    return f"Model registry access provisioned for employee {employee_id}."
+
+
+@mcp.tool()
+async def provision_cloud_environment(
+    employee_id: int,
+) -> str:
+    """Provision the cloud development environment for an employee."""
+    return f"Cloud environment provisioned for employee {employee_id}."
+
+
+@mcp.tool()
+async def provision_infrastructure_access(
+    employee_id: int,
+) -> str:
+    """Provision infrastructure access for an employee."""
+    return f"Infrastructure access provisioned for employee {employee_id}."
+
+
+@mcp.tool()
+async def provision_deployment_access(
+    employee_id: int,
+) -> str:
+    """Provision deployment access for an employee."""
+    return f"Deployment access provisioned for employee {employee_id}."
+
+
 if __name__ == "__main__":
     mcp.run(
         transport="streamable-http",
