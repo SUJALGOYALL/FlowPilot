@@ -106,15 +106,29 @@ class WorkflowExecutionService:
         if not tasks:
             return workflow_run
 
-        # Start the workflow once the first execution begins.
-        if workflow_run.status == "pending":
-            workflow_run.status = "running"
-            workflow_run.started_at = datetime.now(timezone.utc)
+        # If any task failed, the entire workflow has failed.
+        if any(task.status == "failed" for task in tasks):
+            workflow_run.status = "failed"
 
-        # If every task is completed, complete the workflow.
-        if all(task.status == "completed" for task in tasks):
+        # If every task completed, the workflow is completed.
+        elif all(task.status == "completed" for task in tasks):
             workflow_run.status = "completed"
             workflow_run.completed_at = datetime.now(timezone.utc)
+
+        # If any task is waiting for human approval,
+        # the workflow is waiting as well.
+        elif any(
+            task.status == "waiting_approval"
+            for task in tasks
+        ):
+            workflow_run.status = "waiting_approval"
+
+        # Otherwise, tasks are still being executed.
+        else:
+            workflow_run.status = "running"
+
+            if workflow_run.started_at is None:
+                workflow_run.started_at = datetime.now(timezone.utc)
 
         await session.commit()
         await session.refresh(workflow_run)
